@@ -1,1 +1,1 @@
-pub mod activity_csv;
+pub mod activities;
