@@ -41,6 +41,7 @@ impl DB {
         self.components.iter()
     }
 
+    /// Returns an iterator over all components and their durations since last serviced.
     pub fn duration_since_last_serviced<'a>(
         &'a self,
         activity_data: &'a Activities,

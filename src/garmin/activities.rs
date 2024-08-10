@@ -7,6 +7,8 @@ use resolve_path::PathResolveExt;
 use serde::{de::Error as SerdeError, Deserialize, Deserializer};
 use std::{fs::File, str::FromStr, time::Duration};
 
+/// The in-memory representation of a Garmin activity file such as those downloaded from Garmin Connect:
+/// https://connect.garmin.com/modern/activities?activityType=cycling&activitySubType=mountain_biking
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(transparent)]
 pub struct Activities {
@@ -17,7 +19,7 @@ pub struct Activities {
 impl Activities {
     /// Load the garmin mountain bike activity file from which ride time will be summed.
     ///
-    /// https://connect.garmin.com/modern/activities?activityType=cycling&activitySubType=mountain_biking&startDate=2023-01-1
+    /// https://connect.garmin.com/modern/activities?activityType=cycling&activitySubType=mountain_biking
     pub fn load_file(file_path: &str) -> Result<Self, Error> {
         let path = file_path
             .resolve()
@@ -63,6 +65,7 @@ impl Activities {
     }
 }
 
+/// A single activity entry in a Garmin activity file.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct Activity {
     /// Garmin Activity Date
