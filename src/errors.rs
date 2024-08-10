@@ -2,8 +2,11 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Invalid activity file format")]
-    ParserError(#[source] csv::Error),
+    #[error("Invalid activity file format or contents")]
+    ActivityFormatError(#[source] csv::Error),
+
+    #[error("Invalid DB file format or contents")]
+    DBFormatError(#[source] anyhow::Error),
 
     #[error("IO error for path: \"{file_path}\"")]
     IOError {

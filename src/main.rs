@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use service_intervals::garmin;
+use service_intervals::{db::DB, garmin::activities::Activities};
 use std::{process, time::Duration};
 
 /// Simple program to calculate next service intervals based on ride time.
@@ -11,7 +11,14 @@ struct Args {
     ///
     /// https://connect.garmin.com/modern/activities?activityType=cycling&activitySubType=mountain_biking&startDate=2024-01-1
     #[arg(short, long)]
-    file_path: String,
+    activity_file: String,
+
+    /// File path for the service interval database. This is user-specific data
+    /// and should be stored in a home directory, or similar.
+    ///
+    /// Defaults to `$HOME/Dropbox/.service-intervals.json`
+    #[arg(short, long, default_value = "~/Dropbox/service-intervals.json")]
+    db_file: String,
 }
 
 fn main() {
@@ -24,16 +31,27 @@ fn main() {
 }
 
 fn run(args: Args) -> Result<()> {
-    let mut records =
-        garmin::activities::load_file(&args.file_path).context("Failed to load activity file")?;
+    let activity_data =
+        Activities::load_file(&args.activity_file).context("Failed to load activity file")?;
 
-    let total_duration: Duration = records
-        .try_fold(Duration::default(), |acc, result| {
-            result.map(|record| acc.saturating_add(record.time))
-        })
-        .context("Failed to process activity records")?;
-    let hours = total_duration.as_secs() / 60 / 60;
-    println!("{hours} hr{s}", s = if hours == 1 { "" } else { "s" });
+    let db = DB::load(&args.db_file).context("Failed to load database file")?;
+    for (component, duration) in db.duration_since_last_serviced(&activity_data) {
+        let component_name = component.name();
+        let duration = hours(duration);
+        let service_interval = hours(component.interval());
+        println!(
+            "{component_name}: {duration}hrs / {service_interval}hrs {status}",
+            status = if duration > service_interval {
+                "SERVICE NOW"
+            } else {
+                "OK"
+            }
+        );
+    }
 
     Ok(())
+}
+
+fn hours(duration: Duration) -> u64 {
+    duration.as_secs() / 60 / 60
 }
