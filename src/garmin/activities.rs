@@ -1,7 +1,9 @@
 //! Utilities for reading and working with Garmin activity files of the kind
 //! retreived from https://connect.garmin.com/modern/activities.
 
-use serde::{Deserialize, Deserializer};
+use crate::errors::Error;
+use serde::{de::Error as SerdeError, Deserialize, Deserializer};
+use std::path::Path;
 use std::str::FromStr;
 use std::{fs::File, time::Duration};
 
@@ -12,29 +14,27 @@ pub struct Record {
     pub time: Duration,
 }
 
-///// Load the garmin mountain bike activity file from which ride time will be summed.
-/////
-///// https://connect.garmin.com/modern/activities?activityType=cycling&activitySubType=mountain_biking&startDate=2023-01-1
-//pub fn load_file(file_path: &str) -> Result<Vec<Record>, Box<dyn Error>> {
-//    let file = File::open(file_path)?;
-//    let mut rdr = csv::Reader::from_reader(file);
-//
-//    let foo = rdr.deserialize::<Record>();
-//
-//    // .collect()?
-//    unimplemented!()
-//}
-
 /// Load the garmin mountain bike activity file from which ride time will be summed.
 ///
 /// https://connect.garmin.com/modern/activities?activityType=cycling&activitySubType=mountain_biking&startDate=2023-01-1
-pub fn load_file(
-    file_path: &str,
-) -> Result<impl Iterator<Item = Result<Record, csv::Error>>, csv::Error> {
-    let file = File::open(file_path)?;
+pub fn load_file(file_path: &str) -> Result<impl Iterator<Item = Result<Record, Error>>, Error> {
+    let path = Path::new(file_path)
+        .canonicalize()
+        .map_err(|e| Error::IOError {
+            source: e,
+            file_path: file_path.to_string(),
+        })?;
+
+    let file = File::open(&path).map_err(|e| Error::IOError {
+        source: e,
+        file_path: path.display().to_string(),
+    })?;
     let rdr = csv::Reader::from_reader(file);
 
-    Ok(rdr.into_deserialize::<Record>())
+    Ok(rdr
+        .into_deserialize::<Record>()
+        .into_iter()
+        .map(|result| result.map_err(Error::ParserError)))
 }
 
 /// Deserialize a garmin duration string of the format "HH:MM:SS" and
@@ -46,7 +46,7 @@ where
     let s: &str = Deserialize::deserialize(deserializer)?;
     let mut it = s.split(':');
     let (Some(hours), Some(mins), Some(secs)) = (it.next(), it.next(), it.next()) else {
-        panic!("TODO: proper error");
+        Err(D::Error::custom("Duration was not in HH:MM:SS format"))?
     };
 
     let (Ok(hours), Ok(mins), Ok(secs)) = (
@@ -54,7 +54,7 @@ where
         u64::from_str(mins),
         u64::from_str(secs),
     ) else {
-        panic!("TODO: proper error");
+        Err(D::Error::custom("Duration was not in HH:MM:SS format"))?
     };
 
     let hours = Duration::from_secs(hours * 60 * 60);

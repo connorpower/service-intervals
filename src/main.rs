@@ -1,6 +1,7 @@
+use anyhow::{Context, Result};
 use clap::Parser;
 use service_intervals::garmin;
-use std::{error::Error, process, time::Duration};
+use std::{process, time::Duration};
 
 /// Simple program to calculate next service intervals based on ride time.
 #[derive(Parser, Debug)]
@@ -17,19 +18,20 @@ fn main() {
     let args = Args::parse();
 
     if let Err(err) = run(args) {
-        println!("{}", err);
+        println!("{:?}", err);
         process::exit(1);
     }
 }
 
-fn run(args: Args) -> Result<(), Box<dyn Error>> {
-    let records = garmin::activities::load_file(&args.file_path)?;
+fn run(args: Args) -> Result<()> {
+    let mut records =
+        garmin::activities::load_file(&args.file_path).context("Failed to load activity file")?;
 
     let total_duration: Duration = records
-        .into_iter()
-        .fold(Duration::default(), |acc, result| {
-            acc.saturating_add(result.expect("TODO - handle error").time)
-        });
+        .try_fold(Duration::default(), |acc, result| {
+            result.map(|record| acc.saturating_add(record.time))
+        })
+        .context("Failed to process activity records")?;
     let hours = total_duration.as_secs() / 60 / 60;
     println!("{hours} hr{s}", s = if hours == 1 { "" } else { "s" });
 
